@@ -98,6 +98,9 @@ func (h *Handler) createMeasures() {
 	h.counters = make(map[string]syncint64.Counter)
 	h.valueRecorders = make(map[string]syncfloat64.Histogram)
 
+	requestCounter, err := h.meter.SyncInt64().Counter(RequestCount)
+	handleErr(err)
+
 	requestBytesCounter, err := h.meter.SyncInt64().Counter(RequestContentLength)
 	handleErr(err)
 
@@ -107,6 +110,7 @@ func (h *Handler) createMeasures() {
 	serverLatencyMeasure, err := h.meter.SyncFloat64().Histogram(ServerLatency)
 	handleErr(err)
 
+	h.counters[RequestCount] = requestCounter
 	h.counters[RequestContentLength] = requestBytesCounter
 	h.counters[ResponseContentLength] = responseBytesCounter
 	h.valueRecorders[ServerLatency] = serverLatencyMeasure
@@ -194,6 +198,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Add metrics
 	attributes := append(labeler.Get(), semconv.HTTPServerMetricAttributesFromHTTPRequest(h.operation, r)...)
+	h.counters[RequestCount].Add(ctx, 1, append(attributes, semconv.HTTPStatusCodeKey.Int(rww.statusCode))...)
 	h.counters[RequestContentLength].Add(ctx, bw.read, attributes...)
 	h.counters[ResponseContentLength].Add(ctx, rww.written, attributes...)
 
